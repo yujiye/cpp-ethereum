@@ -38,37 +38,21 @@ using namespace jsonrpc;
 
 Test::Test(eth::Client& _eth): m_eth(_eth) {}
 
-Json::Value fillJsonWithState(eth::State const& _state, eth::AccountMaskMap const& _map)
+Json::Value fillJsonWithState(eth::State const& _state)
 {
-    bool mapEmpty = (_map.size() == 0);
     Json::Value oState;
     for (auto const& a : _state.addresses())
     {
-        if (_map.size() && _map.find(a.first) == _map.end())
-            continue;
-
         Json::Value o;
-        if (mapEmpty || _map.at(a.first).hasBalance())
-            o["balance"] = toCompactHexPrefixed(_state.balance(a.first), 1);
-        if (mapEmpty || _map.at(a.first).hasNonce())
-            o["nonce"] = toCompactHexPrefixed(_state.getNonce(a.first), 1);
+        o["balance"] = toCompactHexPrefixed(_state.balance(a.first), 1);
+        o["nonce"] = toCompactHexPrefixed(_state.getNonce(a.first), 1);
 
-        if (mapEmpty || _map.at(a.first).hasStorage())
-        {
-            Json::Value store;
-            for (auto const& s : _state.storage(a.first))
-                store[toCompactHexPrefixed(s.second.first, 1)] =
-                    toCompactHexPrefixed(s.second.second, 1);
-            o["storage"] = store;
-        }
-
-        if (mapEmpty || _map.at(a.first).hasCode())
-        {
-            if (_state.code(a.first).size() > 0)
-                o["code"] = toHexPrefixed(_state.code(a.first));
-            else
-                o["code"] = "";
-        }
+        Json::Value store;
+        for (auto const& s : _state.storage(a.first))
+            store[toCompactHexPrefixed(s.second.first, 1)] =
+                toCompactHexPrefixed(s.second.second, 1);
+        o["storage"] = store;
+        o["code"] = toHexPrefixed(_state.code(a.first));
         oState[toHexPrefixed(a.first)] = o;
     }
     return oState;
@@ -83,29 +67,29 @@ string exportLog(eth::LogEntries const& _logs)
     return toHexPrefixed(sha3(s.out()));
 }
 
-const int c_postStateJustHashVersion = 1;
-const int c_postStateFullStateVersion = 2;
-const int c_postStateLogHashVersion = 3;
+const string c_postStateJustHashVersion = "justhash";
+const string c_postStateFullStateVersion = "fullstate";
+const string c_postStateLogHashVersion = "justloghash";
 string Test::test_getPostState(Json::Value const& param1)
 {
     Json::Value out;
     Json::FastWriter fastWriter;
-    if (u256(param1["version"].asString()) == c_postStateJustHashVersion)
+    if (param1["version"].asString() == c_postStateJustHashVersion)
         return toJS(m_eth.postState().state().rootHash());
-    else if (u256(param1["version"].asString()) == c_postStateFullStateVersion)
+    else if (param1["version"].asString() == c_postStateFullStateVersion)
     {
-        eth::AccountMaskMap _map;
-        out = fillJsonWithState(m_eth.postState().state(), _map);
+        out = fillJsonWithState(m_eth.postState().state());
         return fastWriter.write(out);
     }
-    else if (u256(param1["version"].asString()) == c_postStateLogHashVersion)
+    else if (param1["version"].asString() == c_postStateLogHashVersion)
     {
-		if (m_eth.blockChain().receipts().receipts.size() != 0)
-			return exportLog(m_eth.blockChain().receipts().receipts[0].log());
-		else
+        if (m_eth.blockChain().receipts().receipts.size() != 0)
+            return exportLog(m_eth.blockChain().receipts().receipts[0].log());
+        else
             return toJS(EmptyListSHA3);
     }
-    return "";
+    BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+    return "error";
 }
 
 bool Test::test_setChainParams(Json::Value const& param1)

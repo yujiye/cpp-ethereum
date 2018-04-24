@@ -27,6 +27,7 @@
 #include <libethcore/SealEngine.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Precompiled.h>
+#include <libethashseal/GenesisInfo.h>
 #include "GenesisInfo.h"
 #include "State.h"
 #include "Account.h"
@@ -101,7 +102,7 @@ ChainParams ChainParams::loadConfig(
 	json_spirit::read_string_or_throw(_json, val);
 	js::mObject obj = val.get_obj();
 
-    if (obj.count("version") && obj.at("version").get_str() == "1")
+    if (obj.count("version") && u256(obj.at("version").get_str()) == 1)
     {
         obj = prepareFromGeneralConfig(obj);
         cp.setBlockRewardOvewrite(
@@ -292,7 +293,6 @@ bytes ChainParams::genesisBlock() const
 	return block.out();
 }
 
-#include <libethashseal/GenesisInfo.h>
 void checkFieldExist(js::mObject const& _config, string const& _field)
 {
     if (!_config.count(_field))
