@@ -33,6 +33,7 @@
 
 using namespace std;
 using namespace dev;
+using namespace dev::eth;
 using namespace dev::rpc;
 using namespace jsonrpc;
 
@@ -67,29 +68,16 @@ string exportLog(eth::LogEntries const& _logs)
     return toHexPrefixed(sha3(s.out()));
 }
 
-const string c_postStateJustHashVersion = "justhash";
-const string c_postStateFullStateVersion = "fullstate";
-const string c_postStateLogHashVersion = "justloghash";
-string Test::test_getPostState(Json::Value const& param1)
+string Test::test_getLogHash(string const& _txHash)
 {
-    Json::Value out;
-    Json::FastWriter fastWriter;
-    if (param1["version"].asString() == c_postStateJustHashVersion)
-        return toJS(m_eth.postState().state().rootHash());
-    else if (param1["version"].asString() == c_postStateFullStateVersion)
+    if (m_eth.blockChain().isKnownTransaction(h256(_txHash)))
     {
-        out = fillJsonWithState(m_eth.postState().state());
-        return fastWriter.write(out);
-    }
-    else if (param1["version"].asString() == c_postStateLogHashVersion)
-    {
-        if (m_eth.blockChain().receipts().receipts.size() != 0)
-            return exportLog(m_eth.blockChain().receipts().receipts[0].log());
-        else
-            return toJS(EmptyListSHA3);
-    }
-    BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
-    return "error";
+        LocalisedTransaction t = m_eth.localisedTransaction(h256(_txHash));
+        BlockReceipts const& blockReceipts = m_eth.blockChain().receipts(t.blockHash());
+        if (blockReceipts.receipts.size() != 0)
+            return exportLog(blockReceipts.receipts[t.transactionIndex()].log());
+     }
+     return toJS(dev::EmptyListSHA3);
 }
 
 bool Test::test_setChainParams(Json::Value const& param1)
