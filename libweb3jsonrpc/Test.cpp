@@ -39,27 +39,9 @@ using namespace jsonrpc;
 
 Test::Test(eth::Client& _eth): m_eth(_eth) {}
 
-Json::Value fillJsonWithState(eth::State const& _state)
+namespace
 {
-    Json::Value oState;
-    for (auto const& a : _state.addresses())
-    {
-        Json::Value o;
-        o["balance"] = toCompactHexPrefixed(_state.balance(a.first), 1);
-        o["nonce"] = toCompactHexPrefixed(_state.getNonce(a.first), 1);
-
-        Json::Value store;
-        for (auto const& s : _state.storage(a.first))
-            store[toCompactHexPrefixed(s.second.first, 1)] =
-                toCompactHexPrefixed(s.second.second, 1);
-        o["storage"] = store;
-        o["code"] = toHexPrefixed(_state.code(a.first));
-        oState[toHexPrefixed(a.first)] = o;
-    }
-    return oState;
-}
-
-string exportLog(eth::LogEntries const& _logs)
+string logEntriesToLogHash(eth::LogEntries const& _logs)
 {
     RLPStream s;
     s.appendList(_logs.size());
@@ -67,17 +49,28 @@ string exportLog(eth::LogEntries const& _logs)
         l.streamRLP(s);
     return toHexPrefixed(sha3(s.out()));
 }
+}
 
 string Test::test_getLogHash(string const& _txHash)
 {
-    if (m_eth.blockChain().isKnownTransaction(h256(_txHash)))
+    h256 txHash;
+    try
     {
-        LocalisedTransaction t = m_eth.localisedTransaction(h256(_txHash));
-        BlockReceipts const& blockReceipts = m_eth.blockChain().receipts(t.blockHash());
-        if (blockReceipts.receipts.size() != 0)
-            return exportLog(blockReceipts.receipts[t.transactionIndex()].log());
-     }
-     return toJS(dev::EmptyListSHA3);
+        txHash = h256(_txHash);
+    }
+    catch (...)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(Errors::ERROR_RPC_INVALID_PARAMS));
+    }
+
+    if (m_eth.blockChain().isKnownTransaction(txHash))
+    {
+            LocalisedTransaction t = m_eth.localisedTransaction(txHash);
+            BlockReceipts const& blockReceipts = m_eth.blockChain().receipts(t.blockHash());
+            if (blockReceipts.receipts.size() != 0)
+                return logEntriesToLogHash(blockReceipts.receipts[t.transactionIndex()].log());
+    }
+    return toJS(dev::EmptyListSHA3);
 }
 
 bool Test::test_setChainParams(Json::Value const& param1)
